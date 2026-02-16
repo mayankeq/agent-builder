@@ -41,6 +41,15 @@ temp/
 
 # Generated agent output
 output/
+generated/
+
+# Separate repositories (should be moved out)
+website/
+web/
+frontend/
+terraform/
+monitoring/
+nginx/
 
 # Documentation - Status/Summary files (not needed in repo)
 *SUMMARY*.md
