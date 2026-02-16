@@ -38,3 +38,47 @@ coverage/
 # Temporary files
 tmp/
 temp/
+
+# Generated agent output
+output/
+
+# Documentation - Status/Summary files (not needed in repo)
+*SUMMARY*.md
+*COMPLETE*.md
+*STATUS*.md
+*IMPLEMENTATION*.md
+*DEPLOYMENT*.md
+*AUTONOMOUS*.md
+*ANSWERS*.md
+*CHANGELOG*.md
+*REBRANDING*.md
+*OAUTH_*.md
+*ONE_COMMAND*.md
+*HYBRID*.md
+*EXISTING*.md
+*FEATURE*.md
+*INTEGRATION*.md
+*FRONTEND*.md
+*BACKEND*.md
+*WEB_APP*.md
+*DOCKER*.md
+*FULL_STACK*.md
+*SYSTEM*.md
+*PROJECT_COMPLETION*.md
+*REMAINING*.md
+*SETUP_COMPLETE*.md
+PUBLISHING.md
+PROJECT_STRUCTURE.md
+QUICK_SETUP.md
+QUICK_REFERENCE.md
+START_HERE.md
+
+# Website files
+website/PHASE1_COMPLETED.md
+website/PURCHASE_DOMAIN.md
+website/*.backup
+
+# Backup files
+*.backup
+*.bak
+*.old
