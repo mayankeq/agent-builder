@@ -95,3 +95,22 @@ website/*.backup
 *.backup
 *.bak
 *.old
+
+# Setup/Debug/Helper scripts (not needed in repo)
+check-setup.sh
+configure-oauth.js
+fix-oauth-credentials.sh
+oauth-server.js
+setup-oauth-gcloud.sh
+setup-oauth.sh
+setup.sh
+simple-server.js
+verify-docker-setup.sh
+start-all.sh
+stop-all.sh
+agent-runner.js
+
+# Deployment files (reference removed directories)
+Dockerfile.backend
+Dockerfile.frontend
+docker-compose.yml
