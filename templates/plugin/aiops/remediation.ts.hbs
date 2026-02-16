@@ -1,0 +1,53 @@
+/**
+ * Remediation Engine - Auto-remediation logic
+ * {{{remediationLogic}}}
+ */
+
+import { createLogger } from './utils/logger';
+import { MonitoringConfig } from './config';
+import { HealthResult } from './health-checker';
+
+const logger = createLogger('RemediationEngine');
+
+export interface RemediationResult {
+  success: boolean;
+  action: string;
+  error?: Error;
+  metadata?: Record<string, any>;
+}
+
+export class RemediationEngine {
+  private config: MonitoringConfig;
+
+  constructor(config: MonitoringConfig) {
+    this.config = config;
+  }
+
+  /**
+   * Attempt to remediate a failure
+   * {{{remediationImplementation}}}
+   */
+  async remediate(failure: HealthResult): Promise<RemediationResult> {
+    logger.info(`Remediating ${failure.target}`);
+
+    try {
+      // Domain-specific remediation logic injected here
+      {{{remediationCode}}}
+    } catch (error) {
+      logger.error(`Remediation failed for ${failure.target}`, error as Error);
+      return {
+        success: false,
+        action: 'unknown',
+        error: error as Error,
+      };
+    }
+  }
+
+  /**
+   * Validate remediation is safe to execute
+   */
+  private async validateRemediation(target: string, action: string): Promise<boolean> {
+    // Safety checks before executing remediation
+    {{{validationCode}}}
+  }
+}

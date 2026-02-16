@@ -1,0 +1,59 @@
+/**
+ * Health Checker - Domain-specific health check implementation
+ * {{{healthCheckLogic}}}
+ */
+
+import { createLogger } from './utils/logger';
+import { MonitoringConfig } from './config';
+
+const logger = createLogger('HealthChecker');
+
+export interface HealthResult {
+  target: string;
+  healthy: boolean;
+  message: string;
+  severity?: 'info' | 'warning' | 'critical';
+  remediable?: boolean;
+  metadata?: Record<string, any>;
+}
+
+export class HealthChecker {
+  private config: MonitoringConfig;
+
+  constructor(config: MonitoringConfig) {
+    this.config = config;
+  }
+
+  /**
+   * Check health of all configured targets
+   */
+  async checkAll(): Promise<HealthResult[]> {
+    const results: HealthResult[] = [];
+
+    for (const target of this.config.targets) {
+      try {
+        const result = await this.checkTarget(target);
+        results.push(result);
+      } catch (error) {
+        logger.error(`Failed to check ${target}`, error as Error);
+        results.push({
+          target,
+          healthy: false,
+          message: `Health check failed: ${(error as Error).message}`,
+          severity: 'warning',
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Check health of a single target
+   * {{{healthCheckImplementation}}}
+   */
+  private async checkTarget(target: string): Promise<HealthResult> {
+    // Domain-specific health check logic injected here
+    {{{healthCheckCode}}}
+  }
+}

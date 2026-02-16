@@ -1,0 +1,127 @@
+version: "1.0"
+
+# Claude API settings
+claude:
+  model: "claude-sonnet-4.5"
+  max_tokens: 16000
+  temperature: 1.0
+
+  # Extended thinking for design phase
+  extended_thinking:
+    enabled: true
+    budget: "high"  # low (2K), medium (5K), high (10K) tokens
+
+# Workflow settings
+workflow:
+  clarification:
+    max_rounds: 3
+    timeout: 300000  # 5 minutes in milliseconds
+    min_questions: 2
+    max_questions: 3
+
+  design:
+    timeout: 600000  # 10 minutes
+    enable_extended_thinking: true
+    retrieve_similar_patterns: true
+    max_similar_patterns: 5
+
+  implementation:
+    timeout: 900000  # 15 minutes
+    parallelization: true
+    validate_syntax: true
+
+  packaging:
+    timeout: 300000  # 5 minutes
+    generate_readme: true
+    include_examples: true
+
+  learning:
+    enabled: true
+    capture_thinking: true
+    extract_patterns: true
+
+# Parallelism settings
+parallelism:
+  max_agents_parallel: 3  # Run implementation, testing, docs in parallel
+  max_api_calls_parallel: 5
+
+# Retry settings (exponential backoff)
+retry:
+  max_attempts: 3
+  initial_backoff: 2000  # milliseconds
+  max_backoff: 30000
+  exponential_base: 2
+
+# Memory/Learning settings
+memory:
+  enabled: true
+  storage_dir: "./data/memory"
+  pattern_matching:
+    similarity_threshold: 0.7
+    max_similar_patterns: 5
+  sessions:
+    keep_days: 90  # Keep session data for 90 days
+  metrics:
+    track_token_usage: true
+    track_success_rate: true
+    track_duration: true
+
+# Default performance priorities
+performance:
+  speed: "medium"      # low, medium, high
+  quality: "high"      # low, medium, high
+  trust: "high"        # low, medium, high
+  parallelization: "auto"  # none, auto, aggressive
+  budget: "medium"     # low, medium, high
+
+# Template settings
+templates:
+  custom_dir: "./data/templates"
+
+  # Default templates per output type
+  defaults:
+    skill:
+      typescript: "skill/typescript"
+      python: "skill/python"
+    mcp:
+      typescript: "mcp/typescript"
+      python: "mcp/python"
+    cli:
+      typescript: "cli/typescript"
+      python: "cli/python"
+    library:
+      typescript: "library/typescript"
+      python: "library/python"
+
+# Code validation
+validation:
+  enabled: true
+  run_tests: true
+  check_syntax: true
+  check_quality: true
+
+  quality_standards:
+    min_test_coverage: 70  # percentage
+    max_complexity: 10     # cyclomatic complexity
+    max_function_length: 50  # lines
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "structured"  # structured or simple
+  output: "stdout"
+  file_logging:
+    enabled: false
+    path: "./logs/agent-builder.log"
+
+# Output settings
+output:
+  default_dir: "./generated"
+  include_source_maps: true
+  minify: false
+
+# API rate limiting
+rate_limiting:
+  enabled: true
+  max_requests_per_minute: 50
+  retry_after_rate_limit: true

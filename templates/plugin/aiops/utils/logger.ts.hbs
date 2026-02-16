@@ -1,0 +1,32 @@
+/**
+ * Logger utility
+ */
+
+export interface Logger {
+  info(message: string, meta?: any): void;
+  warning(message: string, meta?: any): void;
+  error(message: string, error?: Error, meta?: any): void;
+  debug(message: string, meta?: any): void;
+}
+
+export function createLogger(component: string): Logger {
+  return {
+    info(message: string, meta?: any) {
+      console.log(`[INFO] [${component}] ${message}`, meta || '');
+    },
+
+    warning(message: string, meta?: any) {
+      console.warn(`[WARN] [${component}] ${message}`, meta || '');
+    },
+
+    error(message: string, error?: Error, meta?: any) {
+      console.error(`[ERROR] [${component}] ${message}`, error || '', meta || '');
+    },
+
+    debug(message: string, meta?: any) {
+      if (process.env.DEBUG) {
+        console.debug(`[DEBUG] [${component}] ${message}`, meta || '');
+      }
+    },
+  };
+}

@@ -1,0 +1,65 @@
+name: {{kebabCase name}}
+version: 1.0.0
+description: {{description}}
+
+# Context awareness enabled
+context_aware: true
+auto_index: true
+
+# Capabilities
+capabilities:
+  - code_analysis
+  - semantic_search
+  - project_understanding
+  - context_retrieval
+
+# Project type
+project_type: {{projectType}}
+
+# File types to index
+file_types:
+{{#each fileTypes}}
+  - {{this}}
+{{/each}}
+
+# Commands
+commands:
+  setup:
+    description: Initialize and scan project
+    usage: "{{kebabCase name}} setup"
+
+  query:
+    description: Ask questions about the codebase
+    usage: "{{kebabCase name}} query <question>"
+
+  analyze:
+    description: Analyze specific file or class
+    usage: "{{kebabCase name}} analyze <file>"
+
+  stats:
+    description: Show index statistics
+    usage: "{{kebabCase name}} stats"
+
+  refresh:
+    description: Rebuild context index
+    usage: "{{kebabCase name}} refresh"
+
+# Configuration
+config:
+  context_dir: ~/.synthient/contexts
+  max_file_size: 1048576  # 1MB
+  vector_dimensions: 384
+  similarity_threshold: 0.7
+  top_k_results: 5
+
+# Metadata
+metadata:
+  generated_by: synthient
+  generated_at: {{timestamp}}
+  research_summary: |
+{{#if researchSummary}}
+{{researchSummary}}
+{{else}}
+    Context-aware agent for {{projectType}} projects.
+    Automatically indexes codebase and provides intelligent assistance.
+{{/if}}

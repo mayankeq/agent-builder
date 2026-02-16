@@ -1,0 +1,249 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { promisify } from 'util';
+import * as glob from 'glob';
+
+const readFile = promisify(fs.readFile);
+
+export interface ScanOptions {
+  fileTypes: string[];
+  excludeDirs: string[];
+  maxFileSize?: number;
+}
+
+export interface CodeFile {
+  path: string;
+  content: string;
+  language: string;
+  size: number;
+}
+
+export interface CodeChunk {
+  id: string;
+  filePath: string;
+  content: string;
+  type: 'class' | 'method' | 'function' | 'interface' | 'file';
+  name: string;
+  lineStart: number;
+  lineEnd: number;
+  metadata: Record<string, any>;
+}
+
+/**
+ * Project Scanner - Scans and analyzes project files
+ */
+export class ProjectScanner {
+  private options: Required<ScanOptions>;
+
+  constructor(
+    private projectPath: string,
+    options: ScanOptions
+  ) {
+    this.options = {
+      ...options,
+      maxFileSize: options.maxFileSize || 1024 * 1024, // 1MB default
+    };
+  }
+
+  /**
+   * Scan project and find all relevant files
+   */
+  async scanProject(): Promise<CodeFile[]> {
+    const files: CodeFile[] = [];
+
+    for (const fileType of this.options.fileTypes) {
+      const pattern = `**/*${fileType}`;
+      const matches = await this.findFiles(pattern);
+
+      for (const filePath of matches) {
+        try {
+          const stats = fs.statSync(filePath);
+
+          if (stats.size > this.options.maxFileSize) {
+            console.log(`⚠️  Skipping large file: ${filePath}`);
+            continue;
+          }
+
+          const content = await readFile(filePath, 'utf-8');
+
+          files.push({
+            path: filePath,
+            content,
+            language: this.getLanguage(fileType),
+            size: stats.size,
+          });
+        } catch (error) {
+          console.error(`Error reading ${filePath}:`, error);
+        }
+      }
+    }
+
+    return files;
+  }
+
+  /**
+   * Extract code chunks for indexing
+   */
+  async extractCodeChunks(files: CodeFile[]): Promise<CodeChunk[]> {
+    const chunks: CodeChunk[] = [];
+    let chunkId = 0;
+
+    for (const file of files) {
+      // For {{projectType}} files, extract classes, methods, etc.
+      if (file.language === '{{projectType}}') {
+        const extracted = this.extract{{pascalCase projectType}}Chunks(file);
+        chunks.push(...extracted.map(c => ({ ...c, id: `chunk-${chunkId++}` })));
+      } else {
+        // For other files, chunk by size
+        const extracted = this.chunkBySize(file, 500); // 500 lines per chunk
+        chunks.push(...extracted.map(c => ({ ...c, id: `chunk-${chunkId++}` })));
+      }
+    }
+
+    return chunks;
+  }
+
+  /**
+   * Extract {{pascalCase projectType}}-specific chunks (classes, methods)
+   */
+  private extract{{pascalCase projectType}}Chunks(file: CodeFile): Omit<CodeChunk, 'id'>[] {
+    const chunks: Omit<CodeChunk, 'id'>[] = [];
+    const lines = file.content.split('\n');
+
+    // Simple regex-based extraction (can be enhanced with proper parser)
+    let currentClass: { name: string; start: number; content: string[] } | null = null;
+    let currentMethod: { name: string; start: number; content: string[] } | null = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Detect class declaration
+      const classMatch = line.match(/(?:public|private|protected)?\s*(?:static)?\s*class\s+(\w+)/);
+      if (classMatch) {
+        if (currentClass) {
+          chunks.push({
+            filePath: file.path,
+            content: currentClass.content.join('\n'),
+            type: 'class',
+            name: currentClass.name,
+            lineStart: currentClass.start,
+            lineEnd: i - 1,
+            metadata: { language: file.language },
+          });
+        }
+        currentClass = { name: classMatch[1], start: i, content: [line] };
+        continue;
+      }
+
+      // Detect method declaration
+      const methodMatch = line.match(/(?:public|private|protected)?\s*(?:static)?\s*(?:\w+)\s+(\w+)\s*\(/);
+      if (methodMatch && currentClass) {
+        if (currentMethod) {
+          chunks.push({
+            filePath: file.path,
+            content: currentMethod.content.join('\n'),
+            type: 'method',
+            name: `${currentClass.name}.${currentMethod.name}`,
+            lineStart: currentMethod.start,
+            lineEnd: i - 1,
+            metadata: { className: currentClass.name, language: file.language },
+          });
+        }
+        currentMethod = { name: methodMatch[1], start: i, content: [line] };
+        continue;
+      }
+
+      if (currentClass) {
+        currentClass.content.push(line);
+      }
+      if (currentMethod) {
+        currentMethod.content.push(line);
+      }
+    }
+
+    // Add final class/method
+    if (currentClass) {
+      chunks.push({
+        filePath: file.path,
+        content: currentClass.content.join('\n'),
+        type: 'class',
+        name: currentClass.name,
+        lineStart: currentClass.start,
+        lineEnd: lines.length - 1,
+        metadata: { language: file.language },
+      });
+    }
+
+    return chunks;
+  }
+
+  /**
+   * Chunk file by size
+   */
+  private chunkBySize(file: CodeFile, linesPerChunk: number): Omit<CodeChunk, 'id'>[] {
+    const chunks: Omit<CodeChunk, 'id'>[] = [];
+    const lines = file.content.split('\n');
+
+    for (let i = 0; i < lines.length; i += linesPerChunk) {
+      const chunk = lines.slice(i, i + linesPerChunk).join('\n');
+      chunks.push({
+        filePath: file.path,
+        content: chunk,
+        type: 'file',
+        name: path.basename(file.path),
+        lineStart: i,
+        lineEnd: Math.min(i + linesPerChunk, lines.length),
+        metadata: { language: file.language },
+      });
+    }
+
+    return chunks;
+  }
+
+  /**
+   * Analyze specific file
+   */
+  async analyzeFile(filePath: string): Promise<any> {
+    const content = await readFile(filePath, 'utf-8');
+    const lines = content.split('\n');
+
+    return {
+      path: filePath,
+      lines: lines.length,
+      size: content.length,
+      language: this.getLanguage(path.extname(filePath)),
+      // Add more analysis as needed
+    };
+  }
+
+  /**
+   * Find files matching pattern
+   */
+  private async findFiles(pattern: string): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+      glob(pattern, {
+        cwd: this.projectPath,
+        absolute: true,
+        ignore: this.options.excludeDirs.map(d => `**/${d}/**`),
+      }, (err, files) => {
+        if (err) reject(err);
+        else resolve(files);
+      });
+    });
+  }
+
+  /**
+   * Get language from file extension
+   */
+  private getLanguage(ext: string): string {
+    const map: Record<string, string> = {
+      '.java': 'java',
+      '.ts': 'typescript',
+      '.js': 'javascript',
+      '.py': 'python',
+      '.go': 'go',
+      '.rs': 'rust',
+    };
+    return map[ext] || 'unknown';
+  }
+}

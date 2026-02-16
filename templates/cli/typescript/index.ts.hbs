@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
+
+// {{name}} - {{description}}
+
+async function main() {
+  const argv = await yargs(hideBin(process.argv))
+    .command(
+      'run',
+      'Run the main command',
+      {},
+      async () => {
+        console.log('Running {{name}}...');
+        // Add your logic here
+      }
+    )
+    .help()
+    .alias('help', 'h')
+    .version('{{version}}')
+    .argv;
+}
+
+main().catch((error) => {
+  console.error('Error:', error);
+  process.exit(1);
+});

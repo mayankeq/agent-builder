@@ -1,0 +1,5 @@
+name: monitor-kubernetes-pods
+version: 1.0.0
+description: Monitor Kubernetes pods and auto-restart failed ones
+runtime: node
+entrypoint: dist/index.js

@@ -1,0 +1,56 @@
+/**
+ * Configuration - Monitoring configuration
+ */
+
+import * as fs from 'fs/promises';
+import * as path from 'path';
+
+export interface MonitoringConfig {
+  pollingInterval: number;
+  errorBackoff: number;
+  autoRemediate: boolean;
+  targets: string[];
+  alertChannels: {
+    type: 'slack' | 'email' | 'pagerduty' | 'webhook';
+    config: Record<string, any>;
+  }[];
+  {{{additionalConfigFields}}}
+}
+
+export async function loadConfig(): Promise<MonitoringConfig> {
+  const configPath = process.env.CONFIG_PATH || path.join(process.cwd(), 'config.json');
+
+  try {
+    const content = await fs.readFile(configPath, 'utf-8');
+    const config = JSON.parse(content);
+
+    // Validate configuration
+    validateConfig(config);
+
+    return config;
+  } catch (error) {
+    // Return default configuration
+    return getDefaultConfig();
+  }
+}
+
+function validateConfig(config: any): void {
+  if (!config.pollingInterval || config.pollingInterval < 1000) {
+    throw new Error('pollingInterval must be at least 1000ms');
+  }
+
+  if (!Array.isArray(config.targets) || config.targets.length === 0) {
+    throw new Error('targets must be a non-empty array');
+  }
+}
+
+function getDefaultConfig(): MonitoringConfig {
+  return {
+    pollingInterval: 30000, // 30 seconds
+    errorBackoff: 5000, // 5 seconds
+    autoRemediate: true,
+    targets: [],
+    alertChannels: [],
+    {{{defaultConfigValues}}}
+  };
+}

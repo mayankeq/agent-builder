@@ -1,0 +1,104 @@
+name: Documentation Improvement
+description: Suggest improvements to documentation
+title: "[Docs]: "
+labels: ["documentation", "needs-triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve our documentation! Clear docs make agent-builder better for everyone.
+
+  - type: dropdown
+    id: doc-type
+    attributes:
+      label: Documentation Type
+      description: What type of documentation needs improvement?
+      options:
+        - README
+        - API Documentation
+        - Architecture Documentation
+        - Tutorial/Guide
+        - Code Comments
+        - Examples
+        - Configuration Documentation
+        - CLI Help Text
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Documentation Location
+      description: Where is this documentation located?
+      placeholder: e.g., README.md, docs/architecture.md, src/agents/base-agent.ts
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: Issue Description
+      description: What's wrong with the current documentation?
+      placeholder: |
+        The current documentation is unclear because...
+        It doesn't explain...
+        The example is incorrect...
+    validations:
+      required: true
+
+  - type: textarea
+    id: improvement
+    attributes:
+      label: Suggested Improvement
+      description: How should the documentation be improved?
+      placeholder: |
+        The documentation should explain...
+        Add an example showing...
+        Clarify that...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-content
+    attributes:
+      label: Proposed Content
+      description: If you have specific content to add, please provide it here
+      placeholder: |
+        ```markdown
+        ## New Section
+        Your proposed documentation content here...
+        ```
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Target Audience
+      description: Who is this documentation for?
+      options:
+        - Beginners/First-time users
+        - Intermediate users
+        - Advanced users
+        - Contributors/Developers
+        - All users
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context about the documentation improvement
+      placeholder: |
+        Screenshots of confusing sections
+        Links to similar documentation in other projects
+        Related issues or discussions
+
+  - type: checkboxes
+    id: contributing
+    attributes:
+      label: Contribution
+      description: Can you help with this documentation improvement?
+      options:
+        - label: I can submit a PR with the documentation changes
+        - label: I need help writing the documentation
+        - label: I can review documentation PRs

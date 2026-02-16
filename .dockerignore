@@ -1,0 +1,90 @@
+# =============================================================================
+# Docker Ignore File
+# =============================================================================
+
+# Dependencies
+node_modules
+.npm
+
+# Build outputs
+dist
+build
+.next
+out
+
+# Development
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# Testing
+coverage
+.nyc_output
+*.test.ts
+*.spec.ts
+__tests__
+__mocks__
+
+# Documentation (keep README for reference)
+docs
+*.md
+!README.md
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Terraform
+terraform
+*.tfstate
+*.tfstate.*
+.terraform
+*.tfvars
+
+# Docker
+Dockerfile*
+docker-compose*
+.docker
+
+# CI/CD
+.github
+.gitlab
+.circleci
+Jenkinsfile
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.tgz
+*.tar.gz
+*.zip
+.cache
+tmp
+temp
+
+# Local development
+data
+output
+memory
+sessions
+patterns
+metrics

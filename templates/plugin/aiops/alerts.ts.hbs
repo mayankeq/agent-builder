@@ -1,0 +1,43 @@
+/**
+ * Alert Manager - Notification handling
+ * {{{alertLogic}}}
+ */
+
+import { createLogger } from './utils/logger';
+import { MonitoringConfig } from './config';
+
+const logger = createLogger('AlertManager');
+
+export interface Alert {
+  severity: 'info' | 'warning' | 'critical';
+  target: string;
+  message: string;
+  timestamp: Date;
+  metadata?: Record<string, any>;
+}
+
+export class AlertManager {
+  private config: MonitoringConfig;
+
+  constructor(config: MonitoringConfig) {
+    this.config = config;
+  }
+
+  /**
+   * Send alert through configured channels
+   * {{{alertImplementation}}}
+   */
+  async sendAlert(alert: Alert): Promise<void> {
+    logger.info(`Sending ${alert.severity} alert for ${alert.target}`);
+
+    // Domain-specific alert logic injected here
+    {{{alertCode}}}
+  }
+
+  /**
+   * Format alert message for channel
+   */
+  private formatAlert(alert: Alert, channel: string): string {
+    return `[${alert.severity.toUpperCase()}] ${alert.target}: ${alert.message}`;
+  }
+}

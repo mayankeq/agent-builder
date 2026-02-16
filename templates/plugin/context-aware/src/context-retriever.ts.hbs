@@ -1,0 +1,127 @@
+import type { VectorStore } from './vector-store';
+import type { CodeChunk } from './scanner';
+
+export interface RetrievalOptions {
+  topK?: number;
+  minSimilarity?: number;
+  rerank?: boolean;
+}
+
+export interface ContextResult {
+  chunks: CodeChunk[];
+  relevanceScores: number[];
+  summary: string;
+}
+
+/**
+ * Context Retriever - Retrieves relevant context for queries
+ * Implements RAG (Retrieval Augmented Generation) pattern
+ */
+export class ContextRetriever {
+  constructor(private vectorStore: VectorStore) {}
+
+  /**
+   * Retrieve relevant context for a query
+   */
+  async retrieve(
+    query: string,
+    options: RetrievalOptions = {}
+  ): Promise<ContextResult> {
+    const { topK = 5, minSimilarity = 0.7, rerank = true } = options;
+
+    // Search vector store
+    const chunks = await this.vectorStore.search(query, {
+      topK: topK * 2, // Get more for re-ranking
+      minSimilarity,
+    });
+
+    // Re-rank if requested
+    const rankedChunks = rerank
+      ? this.rerankChunks(chunks, query).slice(0, topK)
+      : chunks.slice(0, topK);
+
+    // Calculate relevance scores (placeholder - in production use proper scoring)
+    const relevanceScores = rankedChunks.map((_, i) => 1.0 - (i * 0.1));
+
+    // Generate summary
+    const summary = this.generateSummary(rankedChunks);
+
+    return {
+      chunks: rankedChunks,
+      relevanceScores,
+      summary,
+    };
+  }
+
+  /**
+   * Re-rank chunks based on query relevance
+   * Simple keyword-based re-ranking for demo
+   */
+  private rerankChunks(chunks: CodeChunk[], query: string): CodeChunk[] {
+    const queryTerms = query.toLowerCase().split(/\s+/);
+
+    const scored = chunks.map(chunk => {
+      const content = chunk.content.toLowerCase();
+      const name = chunk.name.toLowerCase();
+
+      let score = 0;
+
+      // Score based on term matches
+      queryTerms.forEach(term => {
+        if (name.includes(term)) score += 3;
+        if (content.includes(term)) score += 1;
+      });
+
+      // Bonus for certain chunk types
+      if (chunk.type === 'class') score += 0.5;
+      if (chunk.type === 'method') score += 0.3;
+
+      return { chunk, score };
+    });
+
+    // Sort by score descending
+    scored.sort((a, b) => b.score - a.score);
+
+    return scored.map(s => s.chunk);
+  }
+
+  /**
+   * Generate summary of retrieved context
+   */
+  private generateSummary(chunks: CodeChunk[]): string {
+    if (chunks.length === 0) {
+      return 'No relevant context found.';
+    }
+
+    const fileSet = new Set(chunks.map(c => c.filePath));
+    const typeCount: Record<string, number> = {};
+
+    chunks.forEach(c => {
+      typeCount[c.type] = (typeCount[c.type] || 0) + 1;
+    });
+
+    const typeSummary = Object.entries(typeCount)
+      .map(([type, count]) => `${count} ${type}${count > 1 ? 's' : ''}`)
+      .join(', ');
+
+    return `Found ${chunks.length} relevant code chunks from ${fileSet.size} file(s): ${typeSummary}`;
+  }
+
+  /**
+   * Get context as formatted string for prompt
+   */
+  formatContextForPrompt(context: ContextResult): string {
+    let formatted = `# Retrieved Context\n\n${context.summary}\n\n`;
+
+    context.chunks.forEach((chunk, i) => {
+      formatted += `## Context ${i + 1}: ${chunk.name} (${chunk.type})\n`;
+      formatted += `**File**: ${chunk.filePath}:${chunk.lineStart}-${chunk.lineEnd}\n`;
+      formatted += `**Relevance**: ${(context.relevanceScores[i] * 100).toFixed(0)}%\n\n`;
+      formatted += '```' + (chunk.metadata.language || '') + '\n';
+      formatted += chunk.content;
+      formatted += '\n```\n\n';
+    });
+
+    return formatted;
+  }
+}

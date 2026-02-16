@@ -1,0 +1,411 @@
+# =============================================================================
+# Agent Builder - CI/CD Pipeline
+# =============================================================================
+# Automated build, test, and deployment to AWS ECS
+# =============================================================================
+
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+  pull_request:
+    branches:
+      - main
+
+env:
+  AWS_REGION: us-east-1
+  ECR_BACKEND_REPOSITORY: agent-builder-backend
+  ECR_FRONTEND_REPOSITORY: agent-builder-frontend
+  ECS_CLUSTER: agent-builder-production-cluster
+  ECS_BACKEND_SERVICE: agent-builder-production-backend
+  ECS_FRONTEND_SERVICE: agent-builder-production-frontend
+  BACKEND_TASK_DEFINITION: agent-builder-production-backend
+  FRONTEND_TASK_DEFINITION: agent-builder-production-frontend
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build and Test
+  # ---------------------------------------------------------------------------
+  test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run type check
+        run: npm run build
+
+      - name: Run tests
+        run: npm test -- --passWithNoTests
+
+  # ---------------------------------------------------------------------------
+  # Security Scanning
+  # ---------------------------------------------------------------------------
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner (filesystem)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Run npm audit
+        run: npm audit --audit-level=high || true
+
+  # ---------------------------------------------------------------------------
+  # Build and Push Docker Images
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    if: github.event_name == 'push'
+
+    outputs:
+      backend_image: ${{ steps.build-backend.outputs.image }}
+      frontend_image: ${{ steps.build-frontend.outputs.image }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set environment variables
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "ENVIRONMENT=production" >> $GITHUB_OUTPUT
+            echo "ECS_CLUSTER=agent-builder-production-cluster" >> $GITHUB_OUTPUT
+          else
+            echo "ENVIRONMENT=staging" >> $GITHUB_OUTPUT
+            echo "ECS_CLUSTER=agent-builder-staging-cluster" >> $GITHUB_OUTPUT
+          fi
+          echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Build, tag, and push backend image
+        id: build-backend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.env.outputs.IMAGE_TAG }}
+        run: |
+          docker build -f Dockerfile.backend -t $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Build, tag, and push frontend image
+        id: build-frontend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.env.outputs.IMAGE_TAG }}
+        run: |
+          docker build -f Dockerfile.frontend -t $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Run Trivy vulnerability scanner (container)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPOSITORY }}:${{ steps.env.outputs.IMAGE_TAG }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # ---------------------------------------------------------------------------
+  # Database Migrations
+  # ---------------------------------------------------------------------------
+  migrate:
+    name: Run Database Migrations
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get database credentials from SSM
+        id: ssm
+        run: |
+          DB_URL=$(aws ssm get-parameter --name "/agent-builder-${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}/database/url" --with-decryption --query 'Parameter.Value' --output text)
+          echo "::add-mask::$DB_URL"
+          echo "DATABASE_URL=$DB_URL" >> $GITHUB_ENV
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --production=false
+
+      - name: Run migrations
+        run: npm run migrate:up
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+  # ---------------------------------------------------------------------------
+  # Deploy to ECS
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy to ECS
+    runs-on: ubuntu-latest
+    needs: [build, migrate]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+      url: ${{ steps.deploy-url.outputs.url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set environment variables
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "ENVIRONMENT=production" >> $GITHUB_OUTPUT
+            echo "ECS_CLUSTER=agent-builder-production-cluster" >> $GITHUB_OUTPUT
+            echo "ECS_BACKEND_SERVICE=agent-builder-production-backend" >> $GITHUB_OUTPUT
+            echo "ECS_FRONTEND_SERVICE=agent-builder-production-frontend" >> $GITHUB_OUTPUT
+          else
+            echo "ENVIRONMENT=staging" >> $GITHUB_OUTPUT
+            echo "ECS_CLUSTER=agent-builder-staging-cluster" >> $GITHUB_OUTPUT
+            echo "ECS_BACKEND_SERVICE=agent-builder-staging-backend" >> $GITHUB_OUTPUT
+            echo "ECS_FRONTEND_SERVICE=agent-builder-staging-frontend" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download backend task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition agent-builder-${{ steps.env.outputs.ENVIRONMENT }}-backend \
+            --query taskDefinition > backend-task-definition.json
+
+      - name: Download frontend task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition agent-builder-${{ steps.env.outputs.ENVIRONMENT }}-frontend \
+            --query taskDefinition > frontend-task-definition.json
+
+      - name: Update backend task definition
+        id: backend-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: backend-task-definition.json
+          container-name: agent-builder-backend
+          image: ${{ needs.build.outputs.backend_image }}
+
+      - name: Update frontend task definition
+        id: frontend-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: frontend-task-definition.json
+          container-name: agent-builder-frontend
+          image: ${{ needs.build.outputs.frontend_image }}
+
+      - name: Deploy backend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.backend-task-def.outputs.task-definition }}
+          service: ${{ steps.env.outputs.ECS_BACKEND_SERVICE }}
+          cluster: ${{ steps.env.outputs.ECS_CLUSTER }}
+          wait-for-service-stability: true
+          wait-for-minutes: 10
+
+      - name: Deploy frontend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.frontend-task-def.outputs.task-definition }}
+          service: ${{ steps.env.outputs.ECS_FRONTEND_SERVICE }}
+          cluster: ${{ steps.env.outputs.ECS_CLUSTER }}
+          wait-for-service-stability: true
+          wait-for-minutes: 10
+
+      - name: Get deployment URL
+        id: deploy-url
+        run: |
+          ALB_DNS=$(aws elbv2 describe-load-balancers --names agent-builder-${{ steps.env.outputs.ENVIRONMENT }}-alb --query 'LoadBalancers[0].DNSName' --output text 2>/dev/null || echo "")
+          if [ -n "$ALB_DNS" ]; then
+            echo "url=http://$ALB_DNS" >> $GITHUB_OUTPUT
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Smoke Tests
+  # ---------------------------------------------------------------------------
+  smoke-test:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get ALB DNS name
+        id: alb
+        run: |
+          ENVIRONMENT=${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+          ALB_DNS=$(aws elbv2 describe-load-balancers --names agent-builder-${ENVIRONMENT}-alb --query 'LoadBalancers[0].DNSName' --output text)
+          echo "dns=$ALB_DNS" >> $GITHUB_OUTPUT
+
+      - name: Wait for service to be ready
+        run: sleep 30
+
+      - name: Health check - Backend
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ steps.alb.outputs.dns }}/health)
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Backend health check failed with status $HTTP_STATUS"
+            exit 1
+          fi
+          echo "Backend health check passed"
+
+      - name: Health check - Frontend
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ steps.alb.outputs.dns }}/)
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Frontend health check failed with status $HTTP_STATUS"
+            exit 1
+          fi
+          echo "Frontend health check passed"
+
+      - name: API smoke test
+        run: |
+          # Test API endpoint
+          RESPONSE=$(curl -s http://${{ steps.alb.outputs.dns }}/api/health 2>/dev/null || echo '{"status":"error"}')
+          echo "API Response: $RESPONSE"
+
+  # ---------------------------------------------------------------------------
+  # Rollback on Failure
+  # ---------------------------------------------------------------------------
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy, smoke-test]
+    if: failure() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set environment variables
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "ENVIRONMENT=production" >> $GITHUB_OUTPUT
+            echo "ECS_CLUSTER=agent-builder-production-cluster" >> $GITHUB_OUTPUT
+          else
+            echo "ENVIRONMENT=staging" >> $GITHUB_OUTPUT
+            echo "ECS_CLUSTER=agent-builder-staging-cluster" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Rollback backend service
+        run: |
+          echo "Rolling back backend service..."
+          aws ecs update-service \
+            --cluster ${{ steps.env.outputs.ECS_CLUSTER }} \
+            --service agent-builder-${{ steps.env.outputs.ENVIRONMENT }}-backend \
+            --force-new-deployment
+
+      - name: Rollback frontend service
+        run: |
+          echo "Rolling back frontend service..."
+          aws ecs update-service \
+            --cluster ${{ steps.env.outputs.ECS_CLUSTER }} \
+            --service agent-builder-${{ steps.env.outputs.ENVIRONMENT }}-frontend \
+            --force-new-deployment
+
+      - name: Notify on rollback
+        run: |
+          echo "::error::Deployment failed and rollback was triggered"
+          echo "Check CloudWatch logs for more details"
+
+  # ---------------------------------------------------------------------------
+  # Notify on Completion
+  # ---------------------------------------------------------------------------
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [deploy, smoke-test]
+    if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
+
+    steps:
+      - name: Deployment summary
+        run: |
+          if [[ "${{ needs.smoke-test.result }}" == "success" ]]; then
+            echo "Deployment completed successfully!"
+          else
+            echo "Deployment failed or had issues"
+          fi

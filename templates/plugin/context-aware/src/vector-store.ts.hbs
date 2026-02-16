@@ -1,0 +1,204 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { connect, Table } from '@lancedb/lancedb';
+import type { CodeChunk } from './scanner';
+
+export interface VectorChunk extends CodeChunk {
+  vector: number[];
+}
+
+/**
+ * Vector Store - Stores and retrieves code embeddings
+ * Uses LanceDB for efficient vector similarity search
+ */
+export class VectorStore {
+  private db: any;
+  private table: Table | null = null;
+  private contextPath: string;
+
+  constructor(contextPath: string) {
+    this.contextPath = contextPath;
+  }
+
+  /**
+   * Check if context exists
+   */
+  async exists(): Promise<boolean> {
+    const dbPath = path.join(this.contextPath, 'vectors.lance');
+    return fs.existsSync(dbPath);
+  }
+
+  /**
+   * Load existing context
+   */
+  async load(): Promise<void> {
+    if (!await this.exists()) {
+      throw new Error('Context does not exist. Run setup first.');
+    }
+
+    this.db = await connect(this.contextPath);
+    this.table = await this.db.openTable('code_chunks');
+  }
+
+  /**
+   * Index code chunks with embeddings
+   */
+  async indexChunks(chunks: CodeChunk[]): Promise<void> {
+    // Ensure context directory exists
+    if (!fs.existsSync(this.contextPath)) {
+      fs.mkdirSync(this.contextPath, { recursive: true });
+    }
+
+    // Connect to database
+    this.db = await connect(this.contextPath);
+
+    // Generate embeddings for chunks
+    console.log('🔢 Generating embeddings...');
+    const vectorChunks = await this.generateEmbeddings(chunks);
+
+    // Create or update table
+    if (await this.tableExists('code_chunks')) {
+      await this.db.dropTable('code_chunks');
+    }
+
+    this.table = await this.db.createTable('code_chunks', vectorChunks);
+
+    // Save metadata
+    const metadata = {
+      indexed_at: new Date().toISOString(),
+      chunk_count: chunks.length,
+      version: '1.0.0',
+    };
+
+    fs.writeFileSync(
+      path.join(this.contextPath, 'metadata.json'),
+      JSON.stringify(metadata, null, 2)
+    );
+  }
+
+  /**
+   * Search for similar code chunks
+   */
+  async search(query: string, options: { topK?: number; minSimilarity?: number } = {}): Promise<CodeChunk[]> {
+    if (!this.table) {
+      await this.load();
+    }
+
+    const { topK = 5, minSimilarity = 0.7 } = options;
+
+    // Generate embedding for query
+    const queryVector = await this.embedText(query);
+
+    // Perform vector search
+    const results = await this.table!
+      .search(queryVector)
+      .limit(topK)
+      .execute();
+
+    // Filter by similarity threshold and convert to CodeChunk
+    return results
+      .filter((r: any) => r._distance >= minSimilarity)
+      .map((r: any) => ({
+        id: r.id,
+        filePath: r.filePath,
+        content: r.content,
+        type: r.type,
+        name: r.name,
+        lineStart: r.lineStart,
+        lineEnd: r.lineEnd,
+        metadata: r.metadata,
+      }));
+  }
+
+  /**
+   * Get count of indexed chunks
+   */
+  async getCount(): Promise<number> {
+    if (!this.table) {
+      await this.load();
+    }
+    return await this.table!.countRows();
+  }
+
+  /**
+   * Get last update timestamp
+   */
+  async getLastUpdate(): Promise<string | null> {
+    const metadataPath = path.join(this.contextPath, 'metadata.json');
+    if (!fs.existsSync(metadataPath)) {
+      return null;
+    }
+    const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+    return metadata.indexed_at;
+  }
+
+  /**
+   * Generate embeddings for code chunks
+   * Using a simple but effective approach for demo
+   * In production, use Claude embeddings or other model
+   */
+  private async generateEmbeddings(chunks: CodeChunk[]): Promise<VectorChunk[]> {
+    const vectorChunks: VectorChunk[] = [];
+
+    for (const chunk of chunks) {
+      // Create text representation
+      const text = `${chunk.name}\n${chunk.content}`;
+      const vector = await this.embedText(text);
+
+      vectorChunks.push({
+        ...chunk,
+        vector,
+      });
+    }
+
+    return vectorChunks;
+  }
+
+  /**
+   * Generate embedding for text
+   * Simple TF-IDF style vector for demo
+   * In production, use proper embedding model
+   */
+  private async embedText(text: string): Promise<number[]> {
+    // Normalize text
+    const normalized = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+    const words = normalized.split(/\s+/).filter(w => w.length > 2);
+
+    // Create vocabulary
+    const vocab = Array.from(new Set(words));
+
+    // Create simple count vector (384 dimensions for compatibility)
+    const vector = new Array(384).fill(0);
+
+    // Hash words to vector positions
+    words.forEach(word => {
+      const hash = this.simpleHash(word) % 384;
+      vector[hash] += 1;
+    });
+
+    // Normalize vector
+    const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
+    return vector.map(val => magnitude > 0 ? val / magnitude : 0);
+  }
+
+  /**
+   * Simple string hash function
+   */
+  private simpleHash(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash);
+  }
+
+  /**
+   * Check if table exists
+   */
+  private async tableExists(name: string): Promise<boolean> {
+    const tables = await this.db.tableNames();
+    return tables.includes(name);
+  }
+}

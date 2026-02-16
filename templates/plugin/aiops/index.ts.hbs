@@ -1,0 +1,117 @@
+#!/usr/bin/env node
+/**
+ * {{name}} - AIOps Monitoring Agent
+ * {{description}}
+ *
+ * Domain: AIOps
+ * Generated: {{currentYear}}
+ */
+
+import { createLogger } from './utils/logger';
+import { MonitoringConfig, loadConfig } from './config';
+import { HealthChecker } from './health-checker';
+import { RemediationEngine } from './remediation';
+import { AlertManager } from './alerts';
+
+const logger = createLogger('{{name}}');
+
+/**
+ * Main monitoring loop
+ */
+async function monitoringLoop(config: MonitoringConfig): Promise<void> {
+  const healthChecker = new HealthChecker(config);
+  const remediationEngine = new RemediationEngine(config);
+  const alertManager = new AlertManager(config);
+
+  logger.info('Starting monitoring loop', {
+    interval: config.pollingInterval,
+    targets: config.targets.length,
+  });
+
+  while (true) {
+    try {
+      // Check health of all targets
+      const healthResults = await healthChecker.checkAll();
+
+      // Detect failures
+      const failures = healthResults.filter(r => !r.healthy);
+
+      if (failures.length > 0) {
+        logger.warning(`Detected ${failures.length} failures`, {
+          failed: failures.map(f => f.target),
+        });
+
+        // Send alerts
+        for (const failure of failures) {
+          await alertManager.sendAlert({
+            severity: failure.severity || 'warning',
+            target: failure.target,
+            message: failure.message,
+            timestamp: new Date(),
+          });
+        }
+
+        // Attempt remediation
+        for (const failure of failures) {
+          if (config.autoRemediate && failure.remediable) {
+            logger.info(`Attempting remediation for ${failure.target}`);
+            const result = await remediationEngine.remediate(failure);
+
+            if (result.success) {
+              logger.info(`Successfully remediated ${failure.target}`);
+              await alertManager.sendAlert({
+                severity: 'info',
+                target: failure.target,
+                message: `Auto-remediated: ${result.action}`,
+                timestamp: new Date(),
+              });
+            } else {
+              logger.error(`Remediation failed for ${failure.target}`, result.error);
+            }
+          }
+        }
+      }
+
+      // Wait for next poll
+      await sleep(config.pollingInterval);
+    } catch (error) {
+      logger.error('Error in monitoring loop', error as Error);
+      await sleep(config.errorBackoff || 5000);
+    }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Main entry point
+ */
+async function main(): Promise<void> {
+  try {
+    const config = await loadConfig();
+    logger.info('{{name}} starting', {
+      version: '{{version}}',
+      config: config,
+    });
+
+    await monitoringLoop(config);
+  } catch (error) {
+    logger.error('Fatal error', error as Error);
+    process.exit(1);
+  }
+}
+
+// Handle graceful shutdown
+process.on('SIGINT', () => {
+  logger.info('Received SIGINT, shutting down gracefully');
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  logger.info('Received SIGTERM, shutting down gracefully');
+  process.exit(0);
+});
+
+main();

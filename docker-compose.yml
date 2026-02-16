@@ -1,0 +1,188 @@
+# =============================================================================
+# Agent Builder - Docker Compose Configuration
+# =============================================================================
+# One-command local development environment
+# Usage: docker-compose up -d
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: agent-builder-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=agent_user
+      - POSTGRES_PASSWORD=agent_pass
+      - POSTGRES_DB=agent_builder
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - agent-builder-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent_user -d agent_builder"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Redis Cache (Optional)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: agent-builder-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - agent-builder-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Backend API Service
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: development
+    container_name: agent-builder-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3000
+      - DATABASE_URL=${DATABASE_URL:-postgresql://agent_user:agent_pass@postgres:5432/agent_builder}
+      - JWT_SECRET=${JWT_SECRET:-your-random-secret-key-change-this-in-production}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-your-random-encryption-key-change-this}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - LOCAL_STORAGE_PATH=/app/artifacts
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # Source code for hot reload in development
+      - ./src:/app/src:ro
+      - ./config:/app/config:ro
+      - ./templates:/app/templates:ro
+      # Persistent storage
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data
+      - ./logs:/app/logs
+      # Node modules (don't override)
+      - backend-node-modules:/app/node_modules
+    networks:
+      - agent-builder-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Frontend Web Application
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: development
+      args:
+        - VITE_API_URL=${BACKEND_URL:-http://localhost:3000}
+    container_name: agent-builder-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=${BACKEND_URL:-http://localhost:3000}
+      - VITE_WS_URL=${BACKEND_URL:-http://localhost:3000}
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      # Source code for hot reload in development
+      - ./web/src:/app/src:ro
+      - ./web/public:/app/public:ro
+      - ./web/index.html:/app/index.html:ro
+      - ./web/vite.config.ts:/app/vite.config.ts:ro
+      - ./web/tailwind.config.js:/app/tailwind.config.js:ro
+      - ./web/postcss.config.js:/app/postcss.config.js:ro
+      - ./web/tsconfig.json:/app/tsconfig.json:ro
+      # Node modules (don't override)
+      - frontend-node-modules:/app/node_modules
+    networks:
+      - agent-builder-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Database Migrator (runs once on startup)
+  # ---------------------------------------------------------------------------
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: development
+    container_name: agent-builder-migrator
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://agent_user:agent_pass@postgres:5432/agent_builder}
+    command: ["node", "scripts/migrate.js", "up"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - agent-builder-network
+    restart: "no"
+
+# -----------------------------------------------------------------------------
+# Networks
+# -----------------------------------------------------------------------------
+networks:
+  agent-builder-network:
+    driver: bridge
+    name: agent-builder-network
+
+# -----------------------------------------------------------------------------
+# Volumes
+# -----------------------------------------------------------------------------
+volumes:
+  postgres-data:
+    name: agent-builder-postgres-data
+    driver: local
+  redis-data:
+    name: agent-builder-redis-data
+    driver: local
+  backend-node-modules:
+    name: agent-builder-backend-node-modules
+    driver: local
+  frontend-node-modules:
+    name: agent-builder-frontend-node-modules
+    driver: local

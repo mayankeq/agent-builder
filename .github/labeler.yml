@@ -1,0 +1,143 @@
+# Auto-labeling configuration for PRs based on changed files
+# See: https://github.com/actions/labeler
+
+# Agent-related changes
+'area: agents':
+  - changed-files:
+    - any-glob-to-any-file: 'src/agents/**/*'
+
+# CLI changes
+'area: cli':
+  - changed-files:
+    - any-glob-to-any-file: 'src/cli/**/*'
+
+# Claude API integration
+'area: claude':
+  - changed-files:
+    - any-glob-to-any-file: 'src/claude/**/*'
+
+# Memory and learning system
+'area: memory':
+  - changed-files:
+    - any-glob-to-any-file: 'src/memory/**/*'
+
+# Orchestration and workflow
+'area: orchestration':
+  - changed-files:
+    - any-glob-to-any-file: 'src/orchestration/**/*'
+
+# Performance optimization
+'area: performance':
+  - changed-files:
+    - any-glob-to-any-file: 'src/performance/**/*'
+
+# Template system
+'area: templates':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'src/templates/**/*'
+      - 'templates/**/*'
+
+# Validation and quality
+'area: validation':
+  - changed-files:
+    - any-glob-to-any-file: 'src/validation/**/*'
+
+# Web server and API
+'area: server':
+  - changed-files:
+    - any-glob-to-any-file: 'src/server/**/*'
+
+# Web frontend
+'area: web':
+  - changed-files:
+    - any-glob-to-any-file: 'web/**/*'
+
+# Database and migrations
+'area: database':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'scripts/migrate.js'
+      - 'migrations/**/*'
+      - 'src/server/db/**/*'
+
+# Documentation
+'documentation':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docs/**/*'
+      - '*.md'
+      - '.github/**/*.md'
+
+# Configuration
+'configuration':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'config/**/*'
+      - '*.config.*'
+      - 'tsconfig.json'
+      - 'package.json'
+
+# Tests
+'tests':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'tests/**/*'
+      - '**/*.test.ts'
+      - '**/*.spec.ts'
+      - 'vitest.config.ts'
+
+# CI/CD
+'ci/cd':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/workflows/**/*'
+      - '.github/actions/**/*'
+
+# Dependencies
+'dependencies':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'npm-shrinkwrap.json'
+
+# TypeScript
+'typescript':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.ts'
+      - 'tsconfig.json'
+
+# Python
+'python':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.py'
+      - 'templates/**/python/**/*'
+
+# Breaking changes (based on file patterns)
+'breaking-change':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'src/types/**/*'
+      - 'src/index.ts'
+
+# Security-related
+'security':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'src/server/middleware/auth.ts'
+      - 'src/server/middleware/security.ts'
+      - '**/auth*.ts'
+      - '**/security*.ts'
+
+# GitHub templates
+'github':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/ISSUE_TEMPLATE/**/*'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - '.github/*.yml'
+      - 'CONTRIBUTING.md'
+      - 'CODE_OF_CONDUCT.md'

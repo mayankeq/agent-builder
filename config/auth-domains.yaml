@@ -1,0 +1,51 @@
+# Allowed Email Domains for Google OAuth
+# Add or remove domains to control access to Synthient
+
+allowed_domains:
+  - trilogy.com
+  - devfactory.com
+  - aurea.com
+  - vrya.com
+
+# To add more domains, simply add them to the list above:
+# - newcompany.com
+# - anothercompany.com
+
+# OAuth Configuration
+oauth:
+  google:
+    # Get these from: https://console.cloud.google.com/apis/credentials
+    client_id: ${GOOGLE_CLIENT_ID}
+    client_secret: ${GOOGLE_CLIENT_SECRET}
+    callback_url: ${GOOGLE_CALLBACK_URL:-http://localhost:3000/auth/google/callback}
+
+  # Session configuration
+  session:
+    secret: ${SESSION_SECRET}
+    max_age_hours: 24
+    secure: ${NODE_ENV:-development} # 'production' enables secure cookies
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET}
+  expires_in: '24h'
+  issuer: 'synthient'
+
+# Security
+security:
+  # Require email verification
+  require_verified_email: true
+
+  # Allow only Google Workspace accounts (not personal Gmail)
+  workspace_only: true
+
+  # Rate limiting
+  rate_limit:
+    max_requests: 100
+    window_minutes: 15
+
+# Logging
+logging:
+  level: ${LOG_LEVEL:-info}
+  log_auth_attempts: true
+  log_failed_logins: true

@@ -1,0 +1,53 @@
+# Source files (we only publish dist/)
+src/
+tests/
+*.test.ts
+
+# Development files
+.vscode/
+.idea/
+*.log
+*.swp
+*.swo
+*~
+
+# Documentation
+docs/
+examples/
+
+# Config files
+.eslintrc*
+.prettierrc*
+tsconfig.json
+vitest.config.ts
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+
+# Other
+*.md
+!README.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+
+# Data directories (don't publish local data)
+data/
+output/
+
+# Build artifacts not needed for npm
+node_modules/
+coverage/
+.nyc_output/
+
+# Keep these in npm package:
+# - dist/
+# - templates/
+# - config/
+# - package.json
+# - README.md
+# - LICENSE

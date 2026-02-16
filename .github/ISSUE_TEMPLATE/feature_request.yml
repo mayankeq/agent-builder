@@ -1,0 +1,113 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please provide as much detail as possible.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Is your feature request related to a problem? Please describe.
+      placeholder: I'm frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like to see
+      placeholder: I would like agent-builder to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or features you've considered
+      placeholder: I've also thought about...
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature Area
+      description: Which area of agent-builder does this feature relate to?
+      options:
+        - CLI Interface
+        - Agent System
+        - Code Generation
+        - Templates
+        - Memory/Learning
+        - Performance
+        - Configuration
+        - Documentation
+        - API/SDK
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Critical - Blocking my usage
+        - High - Would significantly improve my workflow
+        - Medium - Nice to have
+        - Low - Just an idea
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: Describe your specific use case for this feature
+      placeholder: |
+        I want to build agents that...
+        This would help me...
+    validations:
+      required: true
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples
+      description: Provide examples of how this feature would work
+      placeholder: |
+        ```bash
+        agent-builder create --new-feature ...
+        ```
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Any links to similar features in other tools, or relevant documentation
+
+  - type: checkboxes
+    id: contributing
+    attributes:
+      label: Contribution
+      description: Are you interested in contributing this feature?
+      options:
+        - label: I would be willing to implement this feature
+        - label: I need help implementing this feature
+        - label: I can help review PRs for this feature
+
+  - type: checkboxes
+    id: search
+    attributes:
+      label: Search Before Posting
+      description: Please confirm you've searched for existing issues
+      options:
+        - label: I have searched existing issues and discussions
+          required: true

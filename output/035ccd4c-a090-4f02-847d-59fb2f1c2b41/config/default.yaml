@@ -1,0 +1,44 @@
+clarification:
+  max_turns: 10
+  confidence_threshold: 0.75
+  min_clarity_score: 30
+  default_ttl_seconds: 1800
+  activity_extends_ttl: true
+
+llm:
+  default_provider: "openai"
+  cache_enabled: true
+  
+  openai:
+    model: "gpt-3.5-turbo"
+    temperature: 0.7
+    max_tokens: 2000
+    
+  anthropic:
+    model: "claude-3-sonnet-20240229"
+    temperature: 0.7
+    max_tokens: 2000
+
+redis:
+  url: "redis://localhost:6379"
+  key_prefix: "clarification:"
+  default_ttl: 1800
+
+logging:
+  level: "INFO"
+  json_logs: false
+  
+metrics:
+  enabled: true
+  port: 8000
+  path: "/metrics"
+
+domains:
+  default_confidence_threshold: 0.75
+  
+  critical_domains:
+    - medical
+    - financial
+    - legal
+  
+  critical_threshold: 0.90

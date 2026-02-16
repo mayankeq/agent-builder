@@ -1,0 +1,61 @@
+#!/usr/bin/env node
+/**
+ * Setup script for {{name}}
+ * Runs on first installation to initialize the agent
+ */
+
+const { spawn } = require('child_process');
+const path = require('path');
+const readline = require('readline');
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+function question(query) {
+  return new Promise(resolve => rl.question(query, resolve));
+}
+
+async function setup() {
+  console.log('\n🚀 Setting up {{name}}...\n');
+
+  // Ask for project path
+  const projectPath = await question('Enter your {{projectType}} project path (or press Enter for current directory): ');
+  const targetPath = projectPath.trim() || process.cwd();
+
+  console.log(`\n📂 Project path: ${targetPath}`);
+
+  // Ask if they want to index now
+  const indexNow = await question('\nIndex project now? This may take a few minutes. (y/n): ');
+
+  if (indexNow.toLowerCase() === 'y' || indexNow.toLowerCase() === 'yes') {
+    console.log('\n🔍 Scanning and indexing project...\n');
+
+    // Run the agent's setup command
+    const agent = spawn('node', ['dist/index.js', 'setup'], {
+      cwd: __dirname,
+      env: { ...process.env, PROJECT_PATH: targetPath },
+      stdio: 'inherit'
+    });
+
+    agent.on('close', (code) => {
+      if (code === 0) {
+        console.log('\n✅ Setup complete!');
+        console.log('\n📖 Usage:');
+        console.log(`   {{kebabCase name}} query "your question"`);
+        console.log(`   {{kebabCase name}} analyze src/YourClass.{{fileTypes.[0]}}`);
+        console.log(`   {{kebabCase name}} stats`);
+        console.log('\n💡 The agent is now available in Claude Code!\n');
+      } else {
+        console.error('\n❌ Setup failed. Please check the logs above.\n');
+      }
+      rl.close();
+    });
+  } else {
+    console.log('\n⏭️  Skipping index. Run `{{kebabCase name}} setup` when ready.\n');
+    rl.close();
+  }
+}
+
+setup().catch(console.error);

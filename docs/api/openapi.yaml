@@ -1,0 +1,1025 @@
+openapi: 3.0.3
+info:
+  title: Agent-Builder API
+  description: |
+    Agent-Builder is a comprehensive platform for creating LLM-based agents through a five-phase workflow.
+
+    ## Features
+    - 🔐 SSO Authentication (Google, Azure AD, Okta)
+    - 🤖 Multi-LLM Support (Claude, OpenAI, Gemini)
+    - 📊 Real-time Progress Tracking via WebSocket
+    - 🧠 Shared Learning System
+    - 📦 Multiple Output Formats (MCP, CLI, Skill, Library)
+    - 🔒 Secure API Key Management (AES-256-GCM)
+
+    ## Authentication
+    All API endpoints (except `/auth/*` and `/health`) require a JWT token obtained via OAuth flow.
+
+    Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <your-jwt-token>
+    ```
+
+    ## Rate Limiting
+    - **Agent Creation**: 10 requests per hour
+    - **API Key Operations**: 20 requests per hour
+    - **General API**: 100 requests per minute
+    - **Downloads**: 50 requests per hour
+
+    ## Base URL
+    - Production: `https://api.agent-builder.com`
+    - Development: `http://localhost:3000`
+  version: 1.0.0
+  contact:
+    name: Agent-Builder Support
+    email: support@agent-builder.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.agent-builder.com
+    description: Production server
+  - url: http://localhost:3000
+    description: Development server
+
+tags:
+  - name: Authentication
+    description: SSO authentication and session management
+  - name: Agents
+    description: Agent creation and management
+  - name: Sessions
+    description: Build session tracking and management
+  - name: API Keys
+    description: User API key management (encrypted)
+  - name: Downloads
+    description: Artifact downloads
+  - name: Health
+    description: Service health checks
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Check API service health and uptime
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: number
+                    description: Server uptime in seconds
+                  environment:
+                    type: string
+                    example: production
+
+  /api/auth/providers:
+    get:
+      summary: List available SSO providers
+      description: Get list of configured OAuth providers
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: List of providers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: google
+                        name:
+                          type: string
+                          example: Google
+                        enabled:
+                          type: boolean
+                  count:
+                    type: number
+
+  /api/auth/google:
+    get:
+      summary: Initiate Google OAuth flow
+      description: Redirects to Google OAuth consent screen
+      tags:
+        - Authentication
+      responses:
+        '302':
+          description: Redirect to Google OAuth
+
+  /api/auth/google/callback:
+    get:
+      summary: Google OAuth callback
+      description: Handles OAuth callback and returns JWT token
+      tags:
+        - Authentication
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/azure:
+    get:
+      summary: Initiate Azure AD OAuth flow
+      description: Redirects to Azure AD OAuth consent screen
+      tags:
+        - Authentication
+      responses:
+        '302':
+          description: Redirect to Azure AD OAuth
+
+  /api/auth/azure/callback:
+    get:
+      summary: Azure AD OAuth callback
+      description: Handles OAuth callback and returns JWT token
+      tags:
+        - Authentication
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /api/auth/me:
+    get:
+      summary: Get current user
+      description: Returns authenticated user information
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  session:
+                    type: object
+                    properties:
+                      expiresAt:
+                        type: string
+                        format: date-time
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/auth/refresh:
+    post:
+      summary: Refresh JWT token
+      description: Generate a new JWT token before expiration
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: New token generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+
+  /api/auth/logout:
+    post:
+      summary: Logout
+      description: Invalidate current session
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/auth/logout-all:
+    post:
+      summary: Logout from all devices
+      description: Invalidate all user sessions
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logged out from all devices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  count:
+                    type: number
+                    description: Number of sessions invalidated
+
+  /api/agents/create:
+    post:
+      summary: Create a new agent
+      description: |
+        Start agent creation workflow. This is an asynchronous operation that returns
+        a session ID immediately. Monitor progress via WebSocket or polling the session endpoint.
+
+        **Prerequisites:**
+        - User must have a valid Anthropic API key configured
+
+        **Workflow Phases:**
+        1. Clarification (2-3 rounds)
+        2. Design (with extended thinking)
+        3. Implementation (parallel code + tests + docs)
+        4. Packaging
+        5. Learning
+
+        **Average Duration:** 20-35 minutes
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRequest'
+            examples:
+              mcpServer:
+                summary: Create MCP Server
+                value:
+                  description: A GitHub repository analyzer that extracts metrics and insights
+                  outputType: mcp
+                  language: typescript
+                  interactive: false
+              pythonCLI:
+                summary: Create Python CLI
+                value:
+                  description: A log file parser that extracts error patterns
+                  outputType: cli
+                  language: python
+                  interactive: false
+      responses:
+        '202':
+          description: Agent creation started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    example: pending
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /api/agents/examples:
+    get:
+      summary: Get agent examples
+      description: Returns pre-configured agent templates
+      tags:
+        - Agents
+      responses:
+        '200':
+          description: List of examples
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  examples:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AgentExample'
+
+  /api/sessions:
+    get:
+      summary: List user sessions
+      description: Get paginated list of user's agent creation sessions with filtering
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in_progress, completed, failed, cancelled]
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SessionSummary'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+  /api/sessions/{id}:
+    get:
+      summary: Get session details
+      description: Get detailed information about a specific session
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: '#/components/schemas/Session'
+                  auditLog:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLogEntry'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      summary: Delete session
+      description: Delete a session and its artifacts
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/sessions/{id}/cancel:
+    post:
+      summary: Cancel session
+      description: Cancel an in-progress or pending session
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Cannot cancel session in current state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/sessions/stats:
+    get:
+      summary: Get session statistics
+      description: Get user's session statistics and metrics
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Session statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stats:
+                    type: object
+                    properties:
+                      total:
+                        type: number
+                      completed:
+                        type: number
+                      failed:
+                        type: number
+                      inProgress:
+                        type: number
+                      averageDuration:
+                        type: number
+                        description: Average duration in minutes
+
+  /api/api-keys:
+    post:
+      summary: Add or update API key
+      description: |
+        Store user's Anthropic API key (encrypted with AES-256-GCM).
+
+        **Security:**
+        - Keys are encrypted at rest
+        - Encrypted using server-side encryption key from environment
+        - IV and auth tag stored separately
+        - Never returned in API responses
+      tags:
+        - API Keys
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - apiKey
+              properties:
+                apiKey:
+                  type: string
+                  description: Anthropic API key (format sk-ant-...)
+                  example: sk-ant-api03-...
+      responses:
+        '200':
+          description: API key stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+    delete:
+      summary: Delete API key
+      description: Remove user's stored API key
+      tags:
+        - API Keys
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: API key deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/api-keys/validate:
+    post:
+      summary: Validate API key
+      description: |
+        Test the stored API key by making a minimal API call to Anthropic.
+        Updates the validation status in the database.
+      tags:
+        - API Keys
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: API key is valid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  message:
+                    type: string
+                  lastValidated:
+                    type: string
+                    format: date-time
+        '400':
+          description: API key is invalid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /api/api-keys/status:
+    get:
+      summary: Get API key status
+      description: Check if user has an API key and its validation status
+      tags:
+        - API Keys
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: API key status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exists:
+                    type: boolean
+                  valid:
+                    type: boolean
+                  lastValidated:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+
+  /api/downloads/{sessionId}/artifacts:
+    get:
+      summary: Download session artifacts
+      description: |
+        Download all generated artifacts as a ZIP file.
+
+        **Requirements:**
+        - Session must be in 'completed' status
+        - User must own the session
+
+        **Contents:**
+        - Generated source code
+        - Tests
+        - Documentation
+        - Package configuration
+      tags:
+        - Downloads
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ZIP file download
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: attachment; filename="session-id.zip"
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /api/downloads/{sessionId}/artifacts/url:
+    get:
+      summary: Get presigned download URL
+      description: |
+        Generate a presigned S3 URL for downloading artifacts.
+        Useful for direct downloads without proxying through the API.
+      tags:
+        - Downloads
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: expiresIn
+          in: query
+          schema:
+            type: integer
+            minimum: 60
+            maximum: 7200
+            default: 3600
+            description: URL expiration time in seconds (max 2 hours)
+      responses:
+        '200':
+          description: Presigned URL generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                  expiresIn:
+                    type: number
+                  expiresAt:
+                    type: string
+                    format: date-time
+
+  /api/downloads/{sessionId}/metadata:
+    get:
+      summary: Get artifacts metadata
+      description: Get information about artifacts without downloading
+      tags:
+        - Downloads
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Artifacts metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionId:
+                    type: string
+                    format: uuid
+                  artifacts:
+                    type: object
+                    properties:
+                      size:
+                        type: number
+                        description: Size in bytes
+                      lastModified:
+                        type: string
+                        format: date-time
+                      contentType:
+                        type: string
+                      s3Key:
+                        type: string
+                  session:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      outputType:
+                        type: string
+                      language:
+                        type: string
+                      completedAt:
+                        type: string
+                        format: date-time
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+        details:
+          type: object
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT authentication token
+        user:
+          $ref: '#/components/schemas/User'
+        expiresAt:
+          type: string
+          format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        provider:
+          type: string
+          enum: [google, azure, okta]
+        createdAt:
+          type: string
+          format: date-time
+        lastLogin:
+          type: string
+          format: date-time
+
+    CreateAgentRequest:
+      type: object
+      required:
+        - description
+      properties:
+        description:
+          type: string
+          minLength: 10
+          description: Natural language description of the agent to build
+          example: A web scraper that extracts product prices from e-commerce sites
+        outputType:
+          type: string
+          enum: [skill, mcp, cli, library]
+          default: mcp
+          description: Output format
+        language:
+          type: string
+          enum: [typescript, python]
+          default: typescript
+          description: Programming language
+        interactive:
+          type: boolean
+          default: false
+          description: Enable interactive clarification mode
+
+    AgentExample:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        outputType:
+          type: string
+        language:
+          type: string
+
+    SessionSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userRequest:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, completed, failed, cancelled]
+        currentPhase:
+          type: string
+          enum: [clarification, design, implementation, packaging, learning]
+          nullable: true
+        progress:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Progress percentage (0.0 to 1.0)
+        outputType:
+          type: string
+        language:
+          type: string
+        error:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        hasArtifacts:
+          type: boolean
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userRequest:
+          type: string
+        status:
+          type: string
+        currentPhase:
+          type: string
+          nullable: true
+        progress:
+          type: number
+        outputType:
+          type: string
+        language:
+          type: string
+        error:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          description: Additional session data (requirements, design decisions, etc.)
+        artifactsS3Key:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    AuditLogEntry:
+      type: object
+      properties:
+        eventType:
+          type: string
+        details:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+        hasNext:
+          type: boolean
+        hasPrev:
+          type: boolean
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required or token invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Unauthorized
+            message: Invalid or expired token
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Validation Error
+            message: Invalid request parameters
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Not Found
+            message: The requested resource does not exist
+
+    RateLimitError:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Too Many Requests
+            message: Rate limit exceeded. Please try again later.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            description: Seconds until rate limit resets
