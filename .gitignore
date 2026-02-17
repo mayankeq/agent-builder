@@ -5,10 +5,36 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# Environment variables
+# Environment variables & Secrets
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
+*.env
+!.env.example
+
+# Security & Credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.crt
+*.der
+*.asc
+*.gpg
+*_rsa
+*_dsa
+*_ed25519
+*_ecdsa
+secrets.json
+credentials.json
+.aws/credentials
+.gcloud/
+service-account*.json
+*-key.json
+auth.json
 
 # Logs
 logs/
