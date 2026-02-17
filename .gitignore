@@ -69,10 +69,10 @@ temp/
 output/
 generated/
 
-# Separate repositories (moved out)
-# website/ - Re-added to main repo
-# web/ - Re-added to main repo (frontend application)
-# frontend/ - Re-added to main repo (alternative frontend)
+# Separate repositories (moved to their own repos)
+website/                  # Moved to: syntheint-website repo
+# web/ - In main repo (frontend application)
+# frontend/ - In main repo (alternative frontend)
 terraform/
 monitoring/
 nginx/
