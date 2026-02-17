@@ -71,8 +71,8 @@ generated/
 
 # Separate repositories (moved out)
 # website/ - Re-added to main repo
-web/
-frontend/
+# web/ - Re-added to main repo (frontend application)
+# frontend/ - Re-added to main repo (alternative frontend)
 terraform/
 monitoring/
 nginx/
