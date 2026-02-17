@@ -69,8 +69,8 @@ temp/
 output/
 generated/
 
-# Separate repositories (should be moved out)
-website/
+# Separate repositories (moved out)
+# website/ - Re-added to main repo
 web/
 frontend/
 terraform/
